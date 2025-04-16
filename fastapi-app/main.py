@@ -46,7 +46,6 @@ async def upload_zip(nama_tabel: str = Form(...), file: UploadFile = File(...)):
         if not csv_files:
             return JSONResponse(status_code=400, content={"error": "ZIP tidak berisi file CSV"})
 
-        # Ambil header dari file pertama
         with open(os.path.join(UPLOAD_DIR, csv_files[0]), newline='', encoding="utf-8") as f:
             reader = csv.reader(f)
             header = next(reader)
@@ -54,21 +53,20 @@ async def upload_zip(nama_tabel: str = Form(...), file: UploadFile = File(...)):
         header.append("PPN_RATE")
         header.append("KODE_TOKO")
 
-        # Buat tabel
         types = [
             "VARCHAR(10)", "VARCHAR(2)", "VARCHAR(8)", "VARCHAR(6)", "INT", "INT", "VARCHAR(2)",
             "INT", "BIGINT", "INT", "BIGINT", "BIGINT", "INT", "BIGINT", "BIGINT", "INT", "BIGINT", "DECIMAL(12,2)",
             "INT", "BIGINT", "DECIMAL(12,2)", "BIGINT", "INT", "BIGINT", "INT", "BIGINT", "DECIMAL(12,2)", "DECIMAL(12,2)",
             "DECIMAL(15,6)", "DECIMAL(12,2)", "BIGINT", "VARCHAR(1)", "VARCHAR(1)", "VARCHAR(4)", "CHAR(1)", "CHAR(1)",
             "INT", "INT", "INT", "INT", "BIGINT", "BIGINT", "BIGINT", "VARCHAR(4)", "VARCHAR(4)", "BIGINT", "BIGINT",
-            "INT", "BIGINT", "INT", "BIGINT", "BIGINT", "BIGINT", "BIGINT", "INT", "VARCHAR(2)", "VARCHAR(4)"
+            "INT", "BIGINT", "INT", "BIGINT", "BIGINT", "BIGINT", "BIGINT", "INT", "VARCHAR(2)", "VARCHAR(4)",
+            "VARCHAR(20)", "VARCHAR(10)"
         ]
 
         columns = [f"`{h.strip()}` {types[i] if i < len(types) else 'TEXT'}" for i, h in enumerate(header)]
         with engine.connect() as conn:
             conn.execute(text(f"CREATE TABLE IF NOT EXISTS `{table_name}` ({','.join(columns)})"))
 
-        # Siapkan database connection
         conn_raw = pymysql.connect(host="localhost", user="root", password="", database="poscabang")
         cur = conn_raw.cursor()
 
@@ -80,7 +78,6 @@ async def upload_zip(nama_tabel: str = Form(...), file: UploadFile = File(...)):
             file_path = os.path.join(UPLOAD_DIR, file_name)
             kode_toko = file_name[:4]
 
-            # Skip jika kode toko sudah ada
             with engine.connect() as conn:
                 result = conn.execute(text(f"SELECT COUNT(*) FROM `{table_name}` WHERE `KODE_TOKO` = :kt"), {"kt": kode_toko})
                 if result.scalar() > 0:
@@ -88,19 +85,23 @@ async def upload_zip(nama_tabel: str = Form(...), file: UploadFile = File(...)):
 
             with open(file_path, newline='', encoding="utf-8") as f:
                 reader = csv.reader(f)
-                next(reader)  # skip header
+                next(reader)
 
                 for i, row in enumerate(reader):
                     while len(row) < len(header) - 2:
                         row.append("")
-                    row.append("")        # PPN_RATE
-                    row.append(kode_toko) # KODE_TOKO
+                    row.append("")
+                    row.append(kode_toko)
 
                     for idx in rupiah_indexes:
                         if idx < len(row):
                             row[idx] = row[idx].replace('.', '')
 
-                    cur.execute(insert_sql, row)
+                    try:
+                        cur.execute(insert_sql, row)
+                    except Exception as e:
+                        print(f"[ERROR] Baris gagal dimasukkan: {row} => {e}")
+                        continue
 
                     total_rows += 1
                     if total_rows % 100 == 0:
