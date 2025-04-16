@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Upload ZIP CSV</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+    }
+    #progress-bar {
+      width: 100%;
+      background-color: #eee;
+      margin-top: 1rem;
+    }
+    #progress-bar-fill {
+      height: 24px;
+      background-color: #4CAF50;
+      width: 0%;
+      text-align: center;
+      color: white;
+      line-height: 24px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Upload ZIP berisi CSV</h1>
+  <form id="upload-form">
+    <label>Nama Tabel:</label>
+    <input type="text" name="nama_tabel" required><br><br>
+    <label>File ZIP:</label>
+    <input type="file" name="file" accept=".zip" required><br><br>
+    <button type="submit">Upload</button>
+  </form>
+
+  <div id="progress-bar" style="display: none;">
+    <div id="progress-bar-fill">0%</div>
+  </div>
+
+  <div id="status" style="margin-top: 1rem;"></div>
+
+  <script>
+    const form = document.getElementById('upload-form');
+    const progressBar = document.getElementById('progress-bar');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const statusDiv = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+      progressBar.style.display = 'block';
+      progressBarFill.style.width = '0%';
+      progressBarFill.textContent = '0%';
+      statusDiv.textContent = "Mengunggah...";
+
+      try {
+        const res = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText);
+        }
+
+        const data = await res.json();
+        statusDiv.textContent = data.message || 'Upload berhasil!';
+      } catch (err) {
+        console.error(err);
+        statusDiv.textContent = 'Terjadi kesalahan: ' + err.message;
+      }
+    });
+
+    setInterval(async () => {
+      try {
+        const res = await fetch('/progress');
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.total > 0) {
+          const percent = Math.floor((data.current / data.total) * 100);
+          progressBarFill.style.width = percent + '%';
+          progressBarFill.textContent = percent + '%';
+        }
+      } catch (e) {
+        console.log("Gagal ambil progress");
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
